@@ -62,6 +62,8 @@ public final class SmsPduUtil
     private static Map<Character,Boolean> gsmStrMap = new HashMap<Character,Boolean>();
     public static final SmsDcs defaultmsgfmt = SmsDcs.getGeneralDataCodingDcs(SmsAlphabet.ASCII, SmsMsgClass.CLASS_UNKNOWN);
     private static final Charset GBK = init("GBK");
+    public static final Boolean Use8bit = Boolean.valueOf(System.getProperty("Use8bitSmsConcatMessage", "true"));
+    
     static {
     	for(char c : gsmstr.toCharArray())
     		gsmStrMap.put(c, true);

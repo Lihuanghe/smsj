@@ -63,7 +63,7 @@ import com.google.common.cache.LoadingCache;
 public abstract class SmsConcatMessage implements SmsMessage {
 	private static final Logger logger = LoggerFactory.getLogger(SmsConcatMessage.class);
 	private static final AtomicInteger rnd_ = new AtomicInteger((new Random()).nextInt(0xffff));
-	private static final Boolean Use8bit = Boolean.valueOf(System.getProperty("Use8bitSmsConcatMessage", "true"));
+	
 	private static final Integer refNoCacheTimeOut = Integer.valueOf(System.getProperty("refNoCacheTimeOut", "60"));
 	// 长短信拆分，要使用 rnd_ 生成统一的长短信ID,但在针对同一个号码，下发多条长短信，并且高并发情况下，随机生成的ID,有机率带来同一个号码
 	// ID重复，冲突，造成短信无法展示
@@ -117,7 +117,7 @@ public abstract class SmsConcatMessage implements SmsMessage {
 			smsPdus = new SmsPdu[] { new SmsPdu(udhElements, ud) };
 		} else {
 			// 使用8bit拆分兼容性好 ，16bit可能很多厂商不支持
-			List<byte[]> slice = sliceUd(ud, maxBytes, Use8bit);
+			List<byte[]> slice = sliceUd(ud, maxBytes, SmsPduUtil.Use8bit);
 
 			int maxSlicLength = slice.size();
 			if (maxSlicLength > 255) {
@@ -139,7 +139,7 @@ public abstract class SmsConcatMessage implements SmsMessage {
 			for (int i = 0; i < smsPdus.length; i++) {
 				byte[] t = slice.get(i);
 				// Create concat header
-				pduUdhElements[0] = Use8bit ?SmsUdhUtil.get8BitConcatUdh(refno, smsPdus.length, i + 1): SmsUdhUtil.get16BitConcatUdh(refno, smsPdus.length, i + 1);
+				pduUdhElements[0] = SmsPduUtil.Use8bit ?SmsUdhUtil.get8BitConcatUdh(refno, smsPdus.length, i + 1): SmsUdhUtil.get16BitConcatUdh(refno, smsPdus.length, i + 1);
 				smsPdus[i] = new SmsPdu(pduUdhElements, t, t.length, ud.getDcs());
 			}
 		}
