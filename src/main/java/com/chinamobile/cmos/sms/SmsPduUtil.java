@@ -58,7 +58,7 @@ public final class SmsPduUtil
     private SmsPduUtil()
     {
     }
-    private static String gsmstr = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà^{}\\[~]|€";
+    public static String gsmstr = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà\u000c^{}\\[~]|€";
     private static Map<Character,Boolean> gsmStrMap = new HashMap<Character,Boolean>();
     public static final SmsDcs defaultmsgfmt = SmsDcs.getGeneralDataCodingDcs(SmsAlphabet.ASCII, SmsMsgClass.CLASS_UNKNOWN);
     private static final Charset GBK = init("GBK");
@@ -709,9 +709,11 @@ public static byte[] stringToUnencodedSeptets(String s)
 		{
 			if (bytes[i] == 0x1b)
 			{
-				extChar = "1b" + Integer.toHexString(bytes[++i]);
+				byte tmp = bytes[++i];
+				extChar = (tmp<16?"1b0":"1b")+Integer.toHexString(tmp);
 				for (j = 0; j < extBytes.length; j++)
-					if (extBytes[j].equalsIgnoreCase(extChar)) text.append(extAlphabet[j]);
+					if (extBytes[j].equalsIgnoreCase(extChar))
+						text.append(extAlphabet[j]);
 			}
 			else
 			{
