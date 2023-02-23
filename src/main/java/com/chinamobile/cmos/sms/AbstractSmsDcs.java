@@ -50,6 +50,8 @@ public abstract class AbstractSmsDcs<T extends AbstractSmsDcs> implements Serial
 	private static final long serialVersionUID = -5797340786616956L;
 	/** The encoded dcs. */
 	protected final byte dcs_;
+	
+	private boolean use8bit = true;
 
 	/**
 	 * Creates a specific DCS.
@@ -180,6 +182,13 @@ public abstract class AbstractSmsDcs<T extends AbstractSmsDcs> implements Serial
 	public String toString() {
 		return "[dcs_=" + dcs_ + "]";
 	}
-	
+
+	public boolean isUse8bit() {
+		return use8bit;
+	}
+
+	public void setUse8bit(boolean use8bit) {
+		this.use8bit = use8bit;
+	}
 	
 }
