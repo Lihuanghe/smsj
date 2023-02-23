@@ -62,7 +62,6 @@ public final class SmsPduUtil
     private static Map<Character,Boolean> gsmStrMap = new HashMap<Character,Boolean>();
     public static final SmsDcs defaultmsgfmt = SmsDcs.getGeneralDataCodingDcs(SmsAlphabet.ASCII, SmsMsgClass.CLASS_UNKNOWN);
     private static final Charset GBK = init("GBK");
-    public static final Boolean Use8bit = Boolean.valueOf(System.getProperty("Use8bitSmsConcatMessage", "true"));
     
     static {
     	for(char c : gsmstr.toCharArray())
@@ -105,34 +104,32 @@ public final class SmsPduUtil
 	 * @param septets
 	 * @return byte arrays
 	 */
-	public static byte[] septetStream2octetStream(byte[] septets) {
-		int octetLength = (int) Math.ceil(((septets.length * 7)) / 8.0);
-		byte[] octets = new byte[octetLength];
-		/*
-		for (int i = 0; i < septets.length; i++) {
-			for (int j = 0; j < 7; j++) {
-				if ((septets[i] & (1 << j)) != 0) {
-					int bitIndex = (i * 7) + j;
-					octets[bitIndex >>> 3] |= 1 << (bitIndex & 7);
-				}
-			}
-		}
-		*/
-		int ind = 0;
-		for (int i = 0; i < septets.length; i++) {
-			if((i+1) % 8 == 0) continue;
-			byte mod = (byte)(i % 8);
-			//当前字节右移  N 个bit ，剩余 7-N个bit
-			byte b = (byte)(septets[i] >> mod);
-			//从后一个字节取前  N 个 bit
-			byte a = 0;
-			if(i<septets.length-1) {
-				a = (byte)(septets[i+1] & (0x7f & (1<<(mod+1)) -1));
-			}
-			octets[ind++] =  (byte) (a<<(7-mod) | b);
-		}
-		return octets;
+	public static byte[] septetStream2octetStream(byte[] septetsData,int startingbitOffset) {
+		int septetCount = septetsData.length ;
+        int byteCount = ((septetCount * 7) + startingbitOffset+7) / 8;
+        byte[] ret = new byte[byteCount];  // Include space for one byte length prefix.
+        for (int i = 0, septets = 0, bitOffset = startingbitOffset;
+                 i < septetsData.length && septets < septetCount;
+                 i++, bitOffset += 7) {
+            int v = septetsData[i];
+            
+            packSmsChar(ret, bitOffset, v);
+            septets++;
+        }
+        
+		return ret;
 	}
+	
+    private static void packSmsChar(byte[] packedChars, int bitOffset, int value) {
+        int byteOffset = bitOffset / 8;
+        int shift = bitOffset % 8;
+
+        packedChars[byteOffset++] |= value << shift;
+
+        if (shift > 1) {
+            packedChars[byteOffset++] = (byte)(value >> (8 - shift));
+        }
+    }
     /**
      * Pack the given string into septets.
      * 
@@ -147,7 +144,7 @@ public final class SmsPduUtil
     {
     	
     	byte[] bytes = stringToUnencodedSeptets(msg);
-    	os.write(septetStream2octetStream(bytes));
+    	os.write(septetStream2octetStream(bytes,0));
     }
 
     /**
@@ -167,7 +164,7 @@ public final class SmsPduUtil
             return null;
         }
 
-       byte[] ba= octetStream2septetStream(data,setptetCnt);
+       byte[] ba= octetStream2septetStream(data,0,setptetCnt,0);
        return unencodedSeptetsToString(ba);
     }
     
@@ -182,35 +179,28 @@ public final class SmsPduUtil
 	 * @return byte arrays
 	 */
 
-	public static byte[] octetStream2septetStream(byte[] octets,int setptetCnt) {
+	public static byte[] octetStream2septetStream(byte[] pdu,int offset,int setptetCnt, int numPaddingBits) {
 		
 		byte[] septets = new byte[setptetCnt];
-		/*
-		for (int newIndex = septets.length - 1; newIndex >= 0; --newIndex) {
-			for (int bit = 6; bit >= 0; --bit) {
-				int oldBitIndex = ((newIndex * 7) + bit);
-				if ((octets[oldBitIndex >>> 3] & (1 << (oldBitIndex & 7))) != 0)
-					septets[newIndex] |= (1 << bit);
-			}
-		}
-		*/
-		
-		int ind = 0;
-		septets[ind++]  = (byte)(octets[0] & 0x7f) ;
-		for(int i = 1 ;i<octets.length ;i++) {
-			int mod = (i + 6 ) % 7 + 1    ;
-			//当前字节 左移 N 个 bit
-			byte b = (byte)(octets[i] << mod);
-			//上一个字节 右移 8-N 个 bit ，剩余最高 N 个bit
-			byte a =(byte) ((octets[i-1] & 0xff ) >>> (8 - mod) & 0x7f);
-			septets[ind++] = (byte)(( b | a ) & 0x7f);
-			if(i % 7 == 0 ) {
-				septets[ind++]  = (byte)(octets[i] & 0x7f) ;
-			}
-		}
-		if(octets.length * 8  == setptetCnt * 7 )
-			septets[ind++] = (byte)(octets[octets.length-1] >>> 1 & 0x7f);
-		
+
+        for (int i = 0 ; i < setptetCnt ; i++) {
+            int bitOffset = (7 * i) + numPaddingBits;
+
+            int byteOffset = bitOffset / 8;
+            int shift = bitOffset % 8;
+            int gsmVal;
+
+            gsmVal = (0x7f & (pdu[offset + byteOffset] >> shift));
+
+            // if it crosses a byte boundry
+            if (shift > 1) {
+                // set msb bits to 0
+                gsmVal &= 0x7f >> (shift - 1);
+
+                gsmVal |= 0x7f & (pdu[offset + byteOffset + 1] << (8 - shift));
+            }
+            septets[i] = (byte)gsmVal;
+        }
 		return septets;
 	}
 

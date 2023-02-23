@@ -113,11 +113,17 @@ public abstract class SmsConcatMessage implements SmsMessage {
 
 	private SmsPdu[] createPdus(SmsUdhElement[] udhElements, SmsUserData ud, int maxBytes) {
 		SmsPdu[] smsPdus = null;
-		if (ud.getLength() <= maxBytes) {
+		int nMaxLength = maxBytes;
+		boolean use8bit = ud.getDcs().isUse8bit();
+		if (ud.getLength() <= nMaxLength) {
 			smsPdus = new SmsPdu[] { new SmsPdu(udhElements, ud) };
 		} else {
+			if(SmsAlphabet.GSM == ud.getDcs().getAlphabet()) {
+				//如果是GSM编码，要实现7bit编码,如果是长短信，最大字符数再减一
+				nMaxLength--;
+			}
 			// 使用8bit拆分兼容性好 ，16bit可能很多厂商不支持
-			List<byte[]> slice = sliceUd(ud, maxBytes, SmsPduUtil.Use8bit);
+			List<byte[]> slice = sliceUd(ud, nMaxLength,use8bit);
 
 			int maxSlicLength = slice.size();
 			if (maxSlicLength > 255) {
@@ -139,7 +145,7 @@ public abstract class SmsConcatMessage implements SmsMessage {
 			for (int i = 0; i < smsPdus.length; i++) {
 				byte[] t = slice.get(i);
 				// Create concat header
-				pduUdhElements[0] = SmsPduUtil.Use8bit ?SmsUdhUtil.get8BitConcatUdh(refno, smsPdus.length, i + 1): SmsUdhUtil.get16BitConcatUdh(refno, smsPdus.length, i + 1);
+				pduUdhElements[0] = use8bit ? SmsUdhUtil.get8BitConcatUdh(refno, smsPdus.length, i + 1): SmsUdhUtil.get16BitConcatUdh(refno, smsPdus.length, i + 1);
 				smsPdus[i] = new SmsPdu(pduUdhElements, t, t.length, ud.getDcs());
 			}
 		}
@@ -150,6 +156,8 @@ public abstract class SmsConcatMessage implements SmsMessage {
 		byte[] udbyte = ud.getData();
 		int udLength = udbyte.length;
 		int nMaxUdLength = use8bit ? maxBytes - 6 : maxBytes - 7;
+		SmsAlphabet udAlphabet = ud.getDcs().getAlphabet();
+
 		int udOffset = 0;
 		List<byte[]> slice = new ArrayList<byte[]>();
 		while (udOffset < udLength) {
@@ -158,10 +166,10 @@ public abstract class SmsConcatMessage implements SmsMessage {
 				oneCopyLength = udLength - udOffset; // 这里是最后一个分片了，长度可能小于nMaxUdLength最大长度
 			} else {
 				// 检查本次分片的最后一个字节是否为双字节字符，避免一个汉字被拆在两半
-				if ((oneCopyLength & 0x01) == 1 && SmsAlphabet.UCS2 == ud.getDcs().getAlphabet()) {
+				if ((oneCopyLength & 0x01) == 1 && SmsAlphabet.UCS2 == udAlphabet) {
 					// 如果是UCS2 ，并且maxBytes是奇数
 					oneCopyLength--;
-				} else if (SmsAlphabet.RESERVED == ud.getDcs().getAlphabet()) {
+				} else if (SmsAlphabet.RESERVED == udAlphabet) {
 					// GBK编码要统计英文字符个数，英文是一个字节，汉字两个字节
 					int oneByteCharCnt = 0; // 英文字符个数
 					for (int k = udOffset; k < udOffset + oneCopyLength; k++) {
@@ -177,7 +185,7 @@ public abstract class SmsConcatMessage implements SmsMessage {
 					if (((nMaxUdLength + oneByteCharCnt) & 0x01) == 1) {
 						oneCopyLength--;
 					}
-				}else if(SmsAlphabet.GSM == ud.getDcs().getAlphabet()) {
+				}else if(SmsAlphabet.GSM == udAlphabet) {
 					//GSM编码要避免把转义字符 0x1b 跟后边的字符分开
 					byte lastByte = udbyte[udOffset + oneCopyLength-1];
 					if(0x1b == lastByte) {
@@ -187,7 +195,7 @@ public abstract class SmsConcatMessage implements SmsMessage {
 			}
 
 			byte[] tmp = new byte[oneCopyLength];
-			System.arraycopy(ud.getData(), udOffset, tmp, 0, oneCopyLength);
+			System.arraycopy(udbyte, udOffset, tmp, 0, oneCopyLength);
 			udOffset += oneCopyLength;
 			slice.add(tmp);
 		}
