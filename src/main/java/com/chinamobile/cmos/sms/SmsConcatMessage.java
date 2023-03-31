@@ -116,8 +116,14 @@ public abstract class SmsConcatMessage implements SmsMessage {
 		SmsPdu[] smsPdus = null;
 		int nMaxLength = maxBytes;
 		boolean use8bit = ud.getDcs().isUse8bit();
-		if (ud.getLength() <= nMaxLength) {
-			smsPdus = new SmsPdu[] { new SmsPdu(udhElements, ud) };
+		if (ud.getLength() <= nMaxLength ) {
+			if(SmsAlphabet.RESERVED ==ud.getDcs().getAlphabet()) {
+				//GBK编码，里实际放的是UCS编码的数据，这个再转成GBK
+				String ucs2Str = new String(ud.getData(),StandardCharsets.UTF_16BE);
+				smsPdus = new SmsPdu[] { new SmsPdu(udhElements, new SmsUserData(ucs2Str.getBytes(SmsPduUtil.GBK), ud.getDcs())) };
+			}else {
+				smsPdus = new SmsPdu[] { new SmsPdu(udhElements, ud) };
+			}
 		} else {
 			if(SmsAlphabet.GSM == ud.getDcs().getAlphabet()) {
 				//如果是GSM编码，要实现7bit编码,如果是长短信，最大字符数再减一
