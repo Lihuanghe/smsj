@@ -61,7 +61,7 @@ public final class SmsPduUtil
     public static String gsmstr = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà\u000c^{}\\[~]|€";
     private static Map<Character,Boolean> gsmStrMap = new HashMap<Character,Boolean>();
     public static final SmsDcs defaultmsgfmt = SmsDcs.getGeneralDataCodingDcs(SmsAlphabet.ASCII, SmsMsgClass.CLASS_UNKNOWN);
-    private static final Charset GBK = init("GBK");
+    public static final Charset GBK = init("GBK");
     
     static {
     	for(char c : gsmstr.toCharArray())

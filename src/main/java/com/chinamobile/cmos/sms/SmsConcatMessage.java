@@ -34,6 +34,7 @@
  * ***** END LICENSE BLOCK ***** */
 package com.chinamobile.cmos.sms;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -122,7 +123,7 @@ public abstract class SmsConcatMessage implements SmsMessage {
 				//如果是GSM编码，要实现7bit编码,如果是长短信，最大字符数再减一
 				nMaxLength--;
 			}
-			// 使用8bit拆分兼容性好 ，16bit可能很多厂商不支持
+			// 使用8bit拆分兼容性好 ，16bit可能有些厂商不支持
 			List<byte[]> slice = sliceUd(ud, nMaxLength,use8bit);
 
 			int maxSlicLength = slice.size();
@@ -166,25 +167,9 @@ public abstract class SmsConcatMessage implements SmsMessage {
 				oneCopyLength = udLength - udOffset; // 这里是最后一个分片了，长度可能小于nMaxUdLength最大长度
 			} else {
 				// 检查本次分片的最后一个字节是否为双字节字符，避免一个汉字被拆在两半
-				if ((oneCopyLength & 0x01) == 1 && SmsAlphabet.UCS2 == udAlphabet) {
+				if ((oneCopyLength & 0x01) == 1 && (SmsAlphabet.UCS2 == udAlphabet || SmsAlphabet.RESERVED == udAlphabet)) {
 					// 如果是UCS2 ，并且maxBytes是奇数
 					oneCopyLength--;
-				} else if (SmsAlphabet.RESERVED == udAlphabet) {
-					// GBK编码要统计英文字符个数，英文是一个字节，汉字两个字节
-					int oneByteCharCnt = 0; // 英文字符个数
-					for (int k = udOffset; k < udOffset + oneCopyLength; k++) {
-						// 最高位是1的是双字节字符
-						if ((udbyte[k] & (byte) 0x80) == (byte) 0x80) {
-							// 汉字占两个字符
-							k++;
-						} else {
-							// 如果是英文字符算1个byte
-							oneByteCharCnt++;
-						}
-					}
-					if (((nMaxUdLength + oneByteCharCnt) & 0x01) == 1) {
-						oneCopyLength--;
-					}
 				}else if(SmsAlphabet.GSM == udAlphabet) {
 					//GSM编码要避免把转义字符 0x1b 跟后边的字符分开
 					byte lastByte = udbyte[udOffset + oneCopyLength-1];
@@ -197,7 +182,14 @@ public abstract class SmsConcatMessage implements SmsMessage {
 			byte[] tmp = new byte[oneCopyLength];
 			System.arraycopy(udbyte, udOffset, tmp, 0, oneCopyLength);
 			udOffset += oneCopyLength;
-			slice.add(tmp);
+			
+			if(SmsAlphabet.RESERVED == udAlphabet) {
+				//GBK编码，里实际放的是UCS编码的数据，这个再转成GBK
+				String ucs2Str = new String(tmp,StandardCharsets.UTF_16BE);
+				slice.add(ucs2Str.getBytes(SmsPduUtil.GBK));
+			}else {
+				slice.add(tmp);
+			}
 		}
 		return slice;
 	}
@@ -218,7 +210,18 @@ public abstract class SmsConcatMessage implements SmsMessage {
 		int udhLength = SmsUdhUtil.getTotalSize(udhElements);
 
 		int nBytesLeft = dcs.getMaxMsglength() - udhLength;
-		smsPdus = createPdus(udhElements, ud, nBytesLeft);
+		//针对GBK编码，因为短信按字符长度不能超过67，因此特殊处理
+		//先按UCS2编码拆分，再转成GBK
+		if(dcs.getAlphabet() == SmsAlphabet.RESERVED) {
+			byte[] gbkData = ud.getData();
+			String originText = new String(gbkData,SmsPduUtil.GBK);
+			byte[] ucs2Data = originText.getBytes(StandardCharsets.UTF_16BE);
+			ud =  new SmsUserData(ucs2Data, dcs);
+			smsPdus = createPdus(udhElements, ud, nBytesLeft);
+		}else {
+			smsPdus = createPdus(udhElements, ud, nBytesLeft);
+		}
+		
 		return smsPdus;
 	}
 
