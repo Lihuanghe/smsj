@@ -699,6 +699,7 @@ public static byte[] stringToUnencodedSeptets(String s)
 		{
 			if (bytes[i] == 0x1b)
 			{
+				if( i + 1 >= bytes.length ) break; //最后一个字节是1b,避免数组越界
 				byte tmp = bytes[++i];
 				extChar = (tmp<16?"1b0":"1b")+Integer.toHexString(tmp);
 				for (j = 0; j < extBytes.length; j++)
